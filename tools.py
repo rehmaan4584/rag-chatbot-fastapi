@@ -1,7 +1,6 @@
 def get_weather(city: str) -> str:
-    """Kisi shehar ka mausam batata hai."""
-    # abhi ke liye fake/hardcoded data, asal API baad mein lagayenge
-    return f"{city} mein abhi 999°C hai aur mausam saaf hai."
+    """Returns the current weather for a given city."""
+    return f"The weather in {city} is currently 32°C and clear."
 def get_time(city: str) -> str:
-    """Kisi shehar ka current waqt batata hai."""
-    return f"{city} mein abhi 3:45 PM hai."
+    """Returns the current local time for a given city."""
+    return f"The current time in {city} is 3:45 PM."

@@ -1,60 +1,51 @@
-import os
-from dotenv import load_dotenv
-from google import genai
 import chromadb
 
-load_dotenv()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+class RagService():
+    def __init__(self,client):
+        self.client = client
+        self.chroma_client = chromadb.Client()
+        self.policy_collection = self.chroma_client.get_or_create_collection(name="company_policy")
+    
+    def setup_rag(self):
+        document_text = """Sick leave policy: Every employee gets 10 sick leaves per year. To take sick leave, the employee must inform their manager one day in advance.
+Annual leave policy: Every employee can take 20 annual leaves. Annual leave must be applied for 15 days in advance.
+Work from home policy: Employees can work from home 2 days per week. This must be approved by the manager in advance."""
+        chunks = [c.strip() for c in document_text.split("\n")]
+        result = self.client.models.embed_content(
+            model="gemini-embedding-001",  
+            contents=chunks                 
+        )
+        embeddings = [item.values for item in result.embeddings]
+        ids = [f"chunk_{i}" for i in range(len(chunks))]
+        self.policy_collection.add(
+            ids=ids,               
+            documents=chunks,       
+            embeddings=embeddings   
+        )
 
-document_text = """Sick leave policy: Har employee ko saal mein 10 sick leaves milti hain. Sick leave lene ke liye manager ko ek din pehle inform karna zaroori hai.
+    def ask_rag(self, question: str):
+        prompt = f"""Answer only using the information below.
+If the answer is not in this information, say "I don't know".
+Information:
+{retrieved_text}
+Question: {question}"""
 
-Annual leave policy: Har employee 20 annual leaves le sakta hai. Annual leave 15 din pehle apply karni hoti hai.
-
-Work from home policy: Employees hafte mein 2 din work from home kar sakte hain. Isay manager se pehle se approve karwana hota hai."""
-
-# Document ko chunks mein todna (abhi ke liye simple tareeqa: double newline se)
-chunks = document_text.split("\n\n")
-
-chroma_client = chromadb.Client()
-policy_collection = chroma_client.get_or_create_collection(name="company_policy")
-
-result = client.models.embed_content(
-    model="gemini-embedding-001",   # yeh sirf embeddings ke liye khaas model hai
-    contents=chunks                  # poori list ek sath bhej dete hain
-)
-embeddings = [item.values for item in result.embeddings]
-def setup_rag():
-    ids = [f"chunk_{i}" for i in range(len(chunks))]
-    policy_collection.add(
-        ids=ids,                # unique IDs
-        documents=chunks,       # asal text
-        embeddings=embeddings   # un ke numbers (vectors)
-    )
-setup_rag() 
-
-def ask_rag(question: str):
-    question_result = client.models.embed_content(
-        model="gemini-embedding-001",   # yeh sirf embeddings ke liye khaas model hai
-        contents=question               
-    )
-    question_embedding = question_result.embeddings[0].values
-
-    results = policy_collection.query(
-        query_embeddings=[question_embedding],   # list ke andar, kyunke ek se zyada sawal bhi pooch sakte hain
-        n_results=1                               # sab se qareeb 1 chunk
-    )
-    retrieved_text = results["documents"][0][0]
-
-    prompt = f"""Sirf neeche di gayi maloomat se jawab do.
-    Agar jawab is maloomat mein nahi hai to kaho 'mujhe nahi pata'. 
-    Maloomat:
-    {retrieved_text}
-    Sawal: {question}"""
-
-    rag_response = client.models.generate_content(
+        rag_response = self.client.models.generate_content(
                 model="gemini-3.8-flash",
                 contents=prompt
             )
+        return rag_response.text
 
-    return rag_response.text
+    def retrieve(self, question: str):
+        question_result = self.client.models.embed_content(
+            model="gemini-embedding-001",  
+            contents=question               
+        )
+        question_embedding = question_result.embeddings[0].values
 
+        results = self.policy_collection.query(
+            query_embeddings=[question_embedding],  
+            n_results=1                             
+        )
+        retrieved_text = results["documents"][0][0]
+        return retrieved_text
